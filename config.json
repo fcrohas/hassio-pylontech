@@ -11,6 +11,9 @@
     "init": false,
     "options": {
         "device": null,
+        "host": null,
+        "port": null,
+        "mode": "serial",
         "mqtt_server": "core-mosquitto",
         "mqtt_user": null,
         "mqtt_pass": null,
@@ -19,6 +22,9 @@
     },
     "schema": {
         "device": "str",
+        "host": "str",
+        "port": "int",
+        "mode": "str",
         "mqtt_server": "str",
         "mqtt_user": "str",
         "mqtt_pass": "str",

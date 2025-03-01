@@ -6,6 +6,7 @@ import json
 import os
 import re
 from select import select
+import socket
 
 import paho.mqtt.client as mqtt
 
@@ -21,6 +22,57 @@ def mqtt_connect(*, server, username, password, client_id):
     client.connect(server)
     return client
 
+def network_command(device, command, *, retries=1, checkframe=True):
+    print(f"Sending command {command}")
+    command_bytes = command.encode()
+    mark_end = MARK_END if checkframe else MARK_PROMPT
+    try:
+        try:
+            # Create a TCP/IP socket
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.connect(device)  # device should be a tuple (host, port)
+        except Exception as e:
+            raise RuntimeError(f"Error connecting to device {device}") from e
+
+        sock.sendall(command_bytes + b"\n")
+
+        response = b""
+        timeout_counter = 0
+        while mark_end not in response:
+            if timeout_counter > 5:
+                raise RuntimeError("Read operation timed out")
+            sock.settimeout(1)
+            try:
+                data = sock.recv(256)
+                if not data:
+                    timeout_counter += 1
+                    continue
+                response += data
+            except socket.timeout:
+                timeout_counter += 1
+                continue
+
+        response = response.rstrip()
+        if checkframe:
+            if not (response.startswith(command.encode() + MARK_BEGIN) and response.endswith(mark_end)):
+                raise Exception("Response frame corrupt")
+            response = response[len(command) + len(MARK_BEGIN):-len(mark_end)]
+        return response.decode()
+    except Exception as e:
+        if not retries:
+            raise RuntimeError(f"Error sending command {command}")
+    finally:
+        try:
+            sock.close()
+        except Exception:
+            pass
+    print(f"Error sending command {command}, {retries} retries remaining")
+    time.sleep(0.1)
+    try:
+        network_command(device, "", retries=0, checkframe=False) # Try to clear prompt and recover
+    except Exception:
+        pass
+    return network_command(device, command, retries=retries-1)
 
 def serial_command(device, command, *, retries=1, checkframe=True):
     print(f"Sending command {command}")
@@ -71,8 +123,11 @@ def serial_command(device, command, *, retries=1, checkframe=True):
     return serial_command(device, command, retries=retries-1)
 
 
-def get_power(device):
-    response = serial_command(device, "pwr")
+def get_power(device, network=False):
+    if network:
+        response = network_command(device, "pwr")
+    else:
+        response = serial_command(device, "pwr")
     try:
         lines = response.split("\n")
 
@@ -125,6 +180,9 @@ def send_data(client, topic, data):
 def main(
     *,
     device,
+    host,
+    port,
+    mode,
     mqtt_server,
     mqtt_user,
     mqtt_pass,
@@ -138,13 +196,14 @@ def main(
         password=mqtt_pass,
         client_id=mqtt_client_id,
     )
-
     print(f"Reading from battery\n")
 
     while True:
         start = time.time()
-
-        data = json.dumps(get_power(device))
+        if mode:
+            data = json.dumps(get_power((host, int(port)), network=True))
+        else:
+            data = json.dumps(get_power(device))
         print("power", data, "\n")
         send_data(client, mqtt_topic, data)
 
@@ -160,6 +219,9 @@ if __name__ == "__main__":
         Monitor battery parameters and send them to an MQTT server.
         Arguments can also be set using their corresponding environment variables.
     """)
+    parser.add_argument("--mode", **env("MODE"), help="Connection mode : network or serial")
+    parser.add_argument("--host", **env("HOST"), help="Remote Host Battery IO device")
+    parser.add_argument("--port", **env("PORT"), help="Remote Port Battery IO device")
     parser.add_argument("--device", **env("DEVICE"), help="Battery IO device")
     parser.add_argument("--mqtt-server", **env("MQTT_SERVER"), help="MQTT server address")
     parser.add_argument("--mqtt-user", **env("MQTT_USER"), help="MQTT username")
@@ -171,6 +233,9 @@ if __name__ == "__main__":
 
     main(
         device=args.device,
+        host=args.host,
+        port=args.port,
+        mode=args.mode == "network",
         mqtt_server=args.mqtt_server,
         mqtt_user=args.mqtt_user,
         mqtt_pass=args.mqtt_pass,
