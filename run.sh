@@ -33,10 +33,11 @@ trap 'kill -s INT $mainpid' SIGINT
 trap 'kill -s TERM $mainpid' SIGTERM
 
 # Run monitor.py. Using a background process with `wait` allows signal traps to have immediate effect.
-./monitor.py 
-# mainpid=$!
-# while kill -0 $mainpid &> /dev/null; do
-#     wait $mainpid
-# done
-# wait $mainpid
-# exit $?
+source venv/bin/activate
+python3 ./monitor.py &
+mainpid=$!
+while kill -0 $mainpid &> /dev/null; do
+    wait $mainpid
+done
+wait $mainpid
+exit $?

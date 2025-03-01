@@ -6,9 +6,16 @@ ENV LANG C.UTF-8
 RUN apk add --update --no-cache  \
         jq                       \
         python3                  \
- && python3 -m ensurepip         \
+ && mkdir /app                   \
+ && cd /app                      \
+ && python3 -m venv venv         \
+ && source venv/bin/activate     \
+ && python3 -m ensurepip         \ 
+ && pip3 install --upgrade pip   \
  && pip3 install paho-mqtt
 
-COPY run.sh monitor.py /
+COPY run.sh monitor.py /app/
 
-CMD ["/run.sh"]
+WORKDIR /app
+
+CMD ["./run.sh"]
