@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CONFIG_PATH=./options.json
+CONFIG_PATH=/data/options.json
 
 config() { if [ -f "$CONFIG_PATH" ]; then jq -r ".$1 // empty" $CONFIG_PATH; fi }
 
