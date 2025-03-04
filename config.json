@@ -18,7 +18,8 @@
         "mqtt_user": null,
         "mqtt_pass": null,
         "mqtt_client_id": null,
-        "mqtt_topic": "power/pylon"
+        "mqtt_topic": "power/pylon",
+        "sleep_iteration": 5
     },
     "schema": {
         "device": "str",
@@ -29,6 +30,7 @@
         "mqtt_user": "str",
         "mqtt_pass": "str",
         "mqtt_client_id": "str",
-        "mqtt_topic": "str"
+        "mqtt_topic": "str",
+        "sleep_iteration": "int"
     }
 }
