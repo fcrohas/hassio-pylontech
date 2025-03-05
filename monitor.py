@@ -207,7 +207,7 @@ def main(
         print("power", data, "\n")
         send_data(client, mqtt_topic, data)
 
-        time.sleep(max(0, sleep_iteration - (time.time() - start)))
+        time.sleep(sleep_iteration)
 
 
 if __name__ == "__main__":

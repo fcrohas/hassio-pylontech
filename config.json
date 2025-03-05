@@ -1,6 +1,6 @@
 {
     "name": "Pylontech Battery",
-    "version": "0.2.0",
+    "version": "0.3.0",
     "slug": "pylon",
     "description": "Monitors a pylontech battery stack",
     "arch": ["amd64", "armv7", "i386"],
