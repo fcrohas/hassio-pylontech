@@ -172,7 +172,12 @@ def get_power(device, network=False):
 
 def send_data(client, topic, data):
     try:
-        client.publish(topic, data, 0, True)
+        # Loop on battery array
+        for index, item in enumerate(json.loads(data)):
+            # publish each item on separated topic ending by number
+            client.publish(f"{topic}/{index}/pwr", json.dumps(item), 0, False)
+        # publish on all
+        client.publish(f"{topic}", data, 0, False)
     except Exception as e:
         raise RuntimeError("Error sending data to mqtt server") from e
 
@@ -228,7 +233,7 @@ if __name__ == "__main__":
     parser.add_argument("--mqtt-pass", **env("MQTT_PASS"), help="MQTT password")
     parser.add_argument("--mqtt-client-id", **env("MQTT_CLIENT_ID"), help="MQTT client id")
     parser.add_argument("--mqtt-topic", **env("MQTT_TOPIC"), help="MQTT topic for data")
-    parser.add_argument("--sleep-iteration", type=float, **env("SLEEP_ITERATION", 5), help="Seconds between iteration starts")
+    parser.add_argument("--sleep-iteration", type=float, **env("SLEEP_ITERATION", 30), help="Seconds between iteration starts")
     args = parser.parse_args()
 
     main(
