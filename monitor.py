@@ -169,15 +169,83 @@ def get_power(device, network=False):
     except Exception as e:
         raise RuntimeError(f"Error parsing power ({response})") from e
 
+def get_bat(device, index, network=False):
+    if network:
+        response = network_command(device, f"bat {index}")
+    else:
+        response = serial_command(device, f"bat {index}")
+    try:
+        lines = response.split("\n")
+        lines[0] = lines[0].replace(" State", "_State")
+        colstart = [0]
+        for m in re.findall(r"([^ ]+ +)", lines[0].rstrip()):
+            colstart.append(colstart[-1] + len(m))
 
-def send_data(client, topic, data):
+        def getcell(line, cellno):
+            linelen = len(line)
+            offset1 = min(linelen, colstart[cellno])
+            if offset1 and line[offset1-1] != " ":
+                offset1 -= 1
+            offset2 = min(linelen, colstart[cellno+1] if cellno+1 < len(colstart) else len(line))
+            if line[offset2-1] != " ":
+                offset2 -= 1
+            return line[offset1:offset2].strip()
+
+        headers = [getcell(lines[0], i) for i in range(len(colstart))]
+
+        items = []
+        for line in lines[1:]:
+            values = [getcell(line, i) for i in range(len(colstart))]
+            item = dict(zip(headers, values))
+            if item["Base_State"] == "Absent":
+                continue
+
+            for k in ("Battery","Volt","Curr","Tempr","Base_State","Volt._State","Curr._State","Temp._State","SOC","Coulomb","BAL"):
+                try:
+                    item[k] = int(item[k])
+                except Exception:
+                    pass
+            try:
+                item["Coulomb"] = int(item["Coulomb"][:-1])
+            except Exception:
+                pass
+            items.append(item)
+
+        return items
+    except Exception as e:
+        raise RuntimeError(f"Error parsing power ({response})") from e
+
+def get_info(device, index, network=False):
+    if network:
+        response = network_command(device, f"info {index}", checkframe=False)
+    else:
+        response = serial_command(device, f"info {index}")
+    try:
+        lines = response.split("\n")
+        data = {}
+        for line in lines:
+            if ':' in line:
+                key, value = line.split(':', 1)
+                data[key.strip()] = value.strip()
+        return data
+    except Exception as e:
+        raise RuntimeError(f"Error parsing power ({response})") from e
+
+def send_data(client, topic, pwrdata, batdata):
     try:
         # Loop on battery array
-        for index, item in enumerate(json.loads(data)):
+        bat_count = json.loads(pwrdata).__len__()
+        for index, item in enumerate(json.loads(pwrdata)):
             # publish each item on separated topic ending by number
             client.publish(f"{topic}/{index}/pwr", json.dumps(item), 0, False)
         # publish on all
-        client.publish(f"{topic}", data, 0, False)
+        client.publish(f"{topic}", pwrdata, 0, False)
+        client.publish(f"{topic}/count", bat_count, 0, False)
+        # Loop on battery array
+        for index, item in enumerate(json.loads(batdata)):
+            print(item)
+            # publish each item on separated topic ending by number
+            client.publish(f"{topic}/{index}/bat", json.dumps(item), 0, False)
     except Exception as e:
         raise RuntimeError("Error sending data to mqtt server") from e
 
@@ -201,17 +269,36 @@ def main(
         password=mqtt_pass,
         client_id=mqtt_client_id,
     )
+    # Info publish flag
+    info_publish = False
+    # Count number of batteries
+    bat_count = 0
     print(f"Reading from battery\n")
-
     while True:
         start = time.time()
         if mode:
-            data = json.dumps(get_power((host, int(port)), network=True))
+            pwrdata = json.dumps(get_power((host, int(port)), network=True))
+            # count number of batteries using pwrdata
+            bat_count = json.loads(pwrdata).__len__()
+            batdata = []
+            for i in range(bat_count):
+                batdata.append(get_bat((host, int(port)), i+1, network=True))
+                print("battery", batdata, "\n")
         else:
-            data = json.dumps(get_power(device))
-        print("power", data, "\n")
-        send_data(client, mqtt_topic, data)
-
+            pwrdata = json.dumps(get_power(device))
+            for i in range(bat_count):
+                batdata.append(get_bat((host, int(port)), i+1, network=True))
+                print("battery", batdata, "\n")
+        print("power", pwrdata, "\n")
+        send_data(client, mqtt_topic, pwrdata, json.dumps(batdata))
+        # Publish info only once
+        if not info_publish:
+            info_publish = True
+            for i in range(bat_count):
+                try:
+                    client.publish(f"{mqtt_topic}/{i}/info", json.dumps(get_info((host, int(port)), i+1, network=True)), 0, False)
+                except Exception as e:
+                    raise RuntimeError("Error sending data to mqtt server") from e
         time.sleep(sleep_iteration)
 
 
