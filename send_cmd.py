@@ -11,6 +11,6 @@ if __name__ == "__main__":
     # args = parser.parse_args()
 
     # response = serial_command(args.device, args.command, checkframe=False)
-    response = get_bat(("192.168.2.227", 9999), 2, network=True)
+    response = get_info(("192.168.2.227", 9999), 2, network=True)
     print(f"Response length: {len(response)}")
     print(response)

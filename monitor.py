@@ -243,7 +243,6 @@ def send_data(client, topic, pwrdata, batdata):
         client.publish(f"{topic}/count", bat_count, 0, False)
         # Loop on battery array
         for index, item in enumerate(json.loads(batdata)):
-            print(item)
             # publish each item on separated topic ending by number
             client.publish(f"{topic}/{index}/bat", json.dumps(item), 0, False)
     except Exception as e:
@@ -296,7 +295,7 @@ def main(
             info_publish = True
             for i in range(bat_count):
                 try:
-                    client.publish(f"{mqtt_topic}/{i}/info", json.dumps(get_info((host, int(port)), i+1, network=True)), 0, False)
+                    client.publish(f"{mqtt_topic}/{i}/info", json.dumps(get_info((host, int(port)), i+1, network=True)), 0, True)
                 except Exception as e:
                     raise RuntimeError("Error sending data to mqtt server") from e
         time.sleep(sleep_iteration)
